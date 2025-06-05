@@ -2,18 +2,19 @@ const videoElement = document.getElementById('webcam');
 const canvasElement = document.getElementById('overlay');
 const canvasCtx = canvasElement.getContext('2d');
 
-let currentMode = null; // Start with no mode selected
+let currentMode = null;
 let earringSrc = 'earrings/earring1.png';
 let necklaceSrc = 'necklaces/necklace1.png';
 
 let earringImg = null;
 let necklaceImg = null;
 
-// Necklace size configuration
-const necklaceSize = {
-  width: 300,
-  height: 150,
-  xOffset: 150 // Half of width to center it
+// Necklace configuration - increased size and adjusted positioning
+const necklaceConfig = {
+  width: 400,       // Increased from 200
+  height: 200,      // Increased from 100
+  yOffset: 30,      // Adjusts how low the necklace hangs
+  scale: 1.2        // Additional scaling factor
 };
 
 // Load image dynamically
@@ -22,7 +23,7 @@ function loadImage(src) {
     const img = new Image();
     img.src = src;
     img.onload = () => resolve(img);
-    img.onerror = () => resolve(null); // Fallback if image fails to load
+    img.onerror = () => resolve(null);
   });
 }
 
@@ -52,22 +53,15 @@ function changeNecklace(filename) {
 // Function to select mode
 function selectMode(mode) {
   currentMode = mode;
-
-  // Hide all options groups
   document.querySelectorAll('.options-group').forEach(group => group.style.display = 'none');
-
-  // Show the selected mode's options group
   document.getElementById(`${mode}-options`).style.display = 'flex';
 }
 
 // Function to dynamically insert jewelry options
 function insertJewelryOptions(jewelryType, containerId) {
   const container = document.getElementById(containerId);
-
-  // Clear existing options
   container.innerHTML = '';
 
-  // Generate buttons for each jewelry item
   for (let i = 1; i <= 12; i++) {
     const filename = `${jewelryType}${i}.png`;
     const button = document.createElement('button');
@@ -87,7 +81,6 @@ function insertJewelryOptions(jewelryType, containerId) {
         changeNecklace(filename);
       }
     };
-
     container.appendChild(button);
   }
 }
@@ -127,24 +120,26 @@ faceMesh.onResults((results) => {
   if (results.multiFaceLandmarks.length > 0) {
     const landmarks = results.multiFaceLandmarks[0];
 
+    // Ear positions
     const left = {
       x: landmarks[132].x * canvasElement.width,
       y: landmarks[132].y * canvasElement.height - 20,
     };
-
     const right = {
       x: landmarks[361].x * canvasElement.width,
       y: landmarks[361].y * canvasElement.height - 20,
     };
 
+    // Improved chin/neck position calculation
     const chin = {
       x: landmarks[152].x * canvasElement.width,
-      y: landmarks[152].y * canvasElement.height + 10,
+      y: (landmarks[152].y * 0.7 + landmarks[200].y * 0.3) * canvasElement.height
     };
 
     leftEarPositions.push(left);
     rightEarPositions.push(right);
     chinPositions.push(chin);
+    
     if (leftEarPositions.length > 5) leftEarPositions.shift();
     if (rightEarPositions.length > 5) rightEarPositions.shift();
     if (chinPositions.length > 5) chinPositions.shift();
@@ -159,12 +154,15 @@ faceMesh.onResults((results) => {
     }
 
     if (currentMode === 'necklace' && necklaceImg && chinSmooth) {
+      const scaledWidth = necklaceConfig.width * necklaceConfig.scale;
+      const scaledHeight = necklaceConfig.height * necklaceConfig.scale;
+      
       canvasCtx.drawImage(
-        necklaceImg, 
-        chinSmooth.x - necklaceSize.xOffset, 
-        chinSmooth.y, 
-        necklaceSize.width, 
-        necklaceSize.height
+        necklaceImg,
+        chinSmooth.x - (scaledWidth / 2),  // Center horizontally
+        chinSmooth.y + necklaceConfig.yOffset,  // Position below chin
+        scaledWidth,
+        scaledHeight
       );
     }
   }
@@ -197,7 +195,7 @@ function takeSnapshot() {
   // Draw video
   ctx.drawImage(videoElement, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
 
-  // Overlay earring if active and available
+  // Overlay earring if active
   if (currentMode === 'earring' && earringImg) {
     const leftSmooth = smooth(leftEarPositions);
     const rightSmooth = smooth(rightEarPositions);
@@ -205,16 +203,21 @@ function takeSnapshot() {
     if (rightSmooth) ctx.drawImage(earringImg, rightSmooth.x - 20, rightSmooth.y, 100, 100);
   }
 
-  // Overlay necklace if active and available
+  // Overlay necklace if active
   if (currentMode === 'necklace' && necklaceImg) {
     const chinSmooth = smooth(chinPositions);
-    if (chinSmooth) ctx.drawImage(
-      necklaceImg, 
-      chinSmooth.x - necklaceSize.xOffset, 
-      chinSmooth.y, 
-      necklaceSize.width, 
-      necklaceSize.height
-    );
+    if (chinSmooth) {
+      const scaledWidth = necklaceConfig.width * necklaceConfig.scale;
+      const scaledHeight = necklaceConfig.height * necklaceConfig.scale;
+      
+      ctx.drawImage(
+        necklaceImg,
+        chinSmooth.x - (scaledWidth / 2),
+        chinSmooth.y + necklaceConfig.yOffset,
+        scaledWidth,
+        scaledHeight
+      );
+    }
   }
 
   // Convert to image and trigger download
